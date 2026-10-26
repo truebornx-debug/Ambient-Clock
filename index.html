@@ -1,0 +1,496 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>StandBy Nightstand Player</title>
+  
+  <!-- iOS PWA Meta Tags -->
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="StandBy Player">
+  
+  <style>
+    :root {
+      --bg-gradient: radial-gradient(circle at center, #1a1c29 0%, #0d0e15 100%);
+      --glass-bg: rgba(255, 255, 255, 0.12);
+      --glass-border: rgba(255, 255, 255, 0.2);
+      --text-main: #ffffff;
+      --accent-cyan: #00f2fe;
+      --accent-rose: #ff416c;
+      --accent-green: #4cd964;
+    }
+
+    /* Nightstand Red Dimmer Mode */
+    body.night-mode {
+      --bg-gradient: #050000;
+      --glass-bg: rgba(50, 0, 0, 0.3);
+      --glass-border: rgba(255, 50, 50, 0.2);
+      --text-main: #ff4d4d;
+      --accent-cyan: #ff3333;
+      --accent-rose: #cc0000;
+      --accent-green: #990000;
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+      user-select: none;
+      font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", "Segoe UI", Roboto, sans-serif;
+    }
+
+    body {
+      background: var(--bg-gradient);
+      color: var(--text-main);
+      height: 100vh;
+      overflow: hidden;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      transition: background 0.8s ease, color 0.8s ease;
+    }
+
+    /* Ambient Wave / Aura Canvas */
+    #ambientCanvas {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      z-index: 1;
+      pointer-events: none;
+    }
+
+    /* StandBy Nightstand Container (Horizontal Priority) */
+    .standby-container {
+      position: relative;
+      z-index: 2;
+      width: 92vw;
+      max-width: 900px;
+      height: 85vh;
+      max-height: 480px;
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 24px;
+      padding: 24px;
+      background: var(--glass-bg);
+      backdrop-filter: blur(30px);
+      -webkit-backdrop-filter: blur(30px);
+      border-radius: 36px;
+      border: 1px solid var(--glass-border);
+      box-shadow: 0 30px 60px rgba(0,0,0,0.5);
+    }
+
+    @media (orientation: portrait) {
+      .standby-container {
+        grid-template-columns: 1fr;
+        height: 90vh;
+        max-height: none;
+      }
+    }
+
+    /* Left Panel: StandBy Clock & Status */
+    .standby-left {
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+      padding: 10px;
+    }
+
+    .time-display {
+      font-size: 5rem;
+      font-weight: 700;
+      letter-spacing: -2px;
+      line-height: 1;
+      text-shadow: 0 4px 20px rgba(0,0,0,0.3);
+    }
+
+    .date-display {
+      font-size: 1.25rem;
+      opacity: 0.8;
+      margin-top: 8px;
+    }
+
+    .charging-status {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 0.95rem;
+      background: rgba(255,255,255,0.1);
+      padding: 8px 14px;
+      border-radius: 20px;
+      width: fit-content;
+    }
+
+    /* Right Panel: Media & Voice Player */
+    .standby-right {
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+      background: rgba(0,0,0,0.2);
+      border-radius: 24px;
+      padding: 20px;
+      border: 1px solid rgba(255,255,255,0.05);
+    }
+
+    .media-card {
+      display: flex;
+      align-items: center;
+      gap: 16px;
+    }
+
+    .album-art {
+      width: 70px;
+      height: 70px;
+      border-radius: 16px;
+      background: linear-gradient(135deg, var(--accent-cyan), var(--accent-rose));
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 1.8rem;
+      box-shadow: 0 10px 20px rgba(0,0,0,0.3);
+    }
+
+    .track-info h3 {
+      font-size: 1.1rem;
+      font-weight: 600;
+    }
+
+    .track-info p {
+      font-size: 0.9rem;
+      opacity: 0.7;
+    }
+
+    /* Voice / Audio Visualizer Canvas */
+    .visualizer-box {
+      position: relative;
+      width: 100%;
+      height: 100px;
+      background: rgba(0,0,0,0.3);
+      border-radius: 16px;
+      overflow: hidden;
+      margin: 10px 0;
+    }
+
+    #voiceCanvas {
+      width: 100%;
+      height: 100%;
+    }
+
+    /* Controls Bar */
+    .controls-bar {
+      display: flex;
+      gap: 12px;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    button {
+      background: rgba(255, 255, 255, 0.15);
+      border: 1px solid var(--glass-border);
+      color: var(--text-main);
+      padding: 10px 18px;
+      border-radius: 14px;
+      font-size: 0.9rem;
+      font-weight: 500;
+      cursor: pointer;
+      transition: all 0.2s ease;
+    }
+
+    button:active {
+      transform: scale(0.95);
+      background: rgba(255, 255, 255, 0.3);
+    }
+
+    .btn-primary {
+      background: var(--accent-cyan);
+      color: #000;
+      font-weight: 600;
+      border: none;
+    }
+
+    /* Dynamic Island / Incoming Call Overlay */
+    .call-overlay {
+      position: absolute;
+      top: -100px;
+      left: 50%;
+      transform: translateX(-50%);
+      width: 90%;
+      max-width: 420px;
+      background: rgba(20, 20, 25, 0.85);
+      backdrop-filter: blur(25px);
+      border: 1px solid rgba(255,255,255,0.25);
+      border-radius: 28px;
+      padding: 16px 20px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      z-index: 10;
+      box-shadow: 0 20px 40px rgba(0,0,0,0.6);
+      transition: top 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+    }
+
+    .call-overlay.active {
+      top: 20px;
+    }
+
+    .caller-details {
+      display: flex;
+      align-items: center;
+      gap: 14px;
+    }
+
+    .caller-avatar {
+      width: 48px;
+      height: 48px;
+      border-radius: 50%;
+      background: linear-gradient(135deg, #4cd964, #5ac8fa);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 1.2rem;
+    }
+
+    .call-actions-group {
+      display: flex;
+      gap: 8px;
+    }
+
+    .btn-decline { background: rgba(255, 59, 48, 0.3); border-color: rgba(255, 59, 48, 0.5); }
+    .btn-answer { background: rgba(76, 217, 100, 0.3); border-color: rgba(76, 217, 100, 0.5); }
+
+    /* Notification Banner */
+    .notification-banner {
+      position: absolute;
+      top: -80px;
+      left: 50%;
+      transform: translateX(-50%);
+      width: 88%;
+      max-width: 380px;
+      background: rgba(30,30,35,0.8);
+      backdrop-filter: blur(20px);
+      border-radius: 20px;
+      border: 1px solid rgba(255,255,255,0.15);
+      padding: 12px 16px;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      z-index: 9;
+      transition: top 0.35s ease;
+    }
+    .notification-banner.active {
+      top: 20px;
+    }
+  </style>
+</head>
+<body>
+
+  <!-- Ambient Background Aura & Wave Impulse Canvas -->
+  <canvas id="ambientCanvas"></canvas>
+
+  <!-- Incoming Call Overlay -->
+  <div id="callOverlay" class="call-overlay">
+    <div class="caller-details">
+      <div class="caller-avatar">📞</div>
+      <div>
+        <h4 id="callerName">Sarah Connor</h4>
+        <p style="font-size: 0.8rem; opacity: 0.7;">Incoming Call...</p>
+      </div>
+    </div>
+    <div class="call-actions-group">
+      <button class="btn-decline" onclick="dismissCall()">Decline</button>
+      <button class="btn-answer" onclick="answerCall()">Answer</button>
+    </div>
+  </div>
+
+  <!-- Notification Banner -->
+  <div id="notifBanner" class="notification-banner">
+    <div style="font-size: 1.5rem;">💬</div>
+    <div>
+      <h5 id="notifTitle">Message</h5>
+      <p id="notifText" style="font-size: 0.85rem; opacity: 0.8;">Hey! Are you awake?</p>
+    </div>
+  </div>
+
+  <!-- StandBy / Nightstand Main UI Container -->
+  <div class="standby-container">
+    
+    <!-- Left: Clock & Status -->
+    <div class="standby-left">
+      <div>
+        <div id="clock" class="time-display">00:00</div>
+        <div id="date" class="date-display">Monday, October 26</div>
+      </div>
+      
+      <div class="charging-status">
+        <span>⚡ 98% Charging</span>
+        <span style="opacity: 0.5;">• StandBy Active</span>
+      </div>
+    </div>
+
+    <!-- Right: Media, Visualizer & Controls -->
+    <div class="standby-right">
+      <div class="media-card">
+        <div class="album-art" id="albumArtIcon">🎵</div>
+        <div class="track-info">
+          <h3 id="trackTitle">Midnight Rain</h3>
+          <p id="trackArtist">Synthwave Chill</p>
+        </div>
+      </div>
+
+      <!-- Live Voice / Audio Visualizer -->
+      <div class="visualizer-box">
+        <canvas id="voiceCanvas"></canvas>
+      </div>
+
+      <!-- Quick Action Buttons -->
+      <div class="controls-bar">
+        <button onclick="toggleNightMode()">🌙 Red Dim</button>
+        <button class="btn-primary" onclick="triggerCallSimulation()">Sim Call</button>
+        <button onclick="triggerNotification()">Sim Notif</button>
+      </div>
+    </div>
+
+  </div>
+
+  <script>
+    // --- 1. CLOCK & AUTOMATED TIME IMPULSE ENGINE ---
+    let lastTriggeredMinute = -1;
+
+    function updateClock() {
+      const now = new Date();
+      let hours = now.getHours();
+      const minutes = now.getMinutes();
+      const seconds = now.getSeconds();
+      
+      const formattedMinutes = String(minutes).padStart(2, '0');
+      document.getElementById('clock').textContent = `${hours}:${formattedMinutes}`;
+
+      const options = { weekday: 'long', month: 'short', day: 'numeric' };
+      document.getElementById('date').textContent = now.toLocaleDateString('en-US', options);
+
+      // Automated 5-Minute and Hourly Impulse Trigger Check
+      if (seconds === 0 && minutes !== lastTriggeredMinute) {
+        if (minutes % 5 === 0) {
+          lastTriggeredMinute = minutes;
+
+          if (minutes === 0) {
+            // Hourly Full Chime Impulse (Warm Rose/Accent Wave)
+            triggerWaveImpulse(window.innerWidth / 4, window.innerHeight / 2, '#ff416c');
+          } else {
+            // 5-Minute Subtle Impulse (Cyan Wave)
+            triggerWaveImpulse(window.innerWidth / 4, window.innerHeight / 2, '#00f2fe');
+          }
+        }
+      }
+    }
+    setInterval(updateClock, 1000);
+    updateClock();
+
+    // --- 2. AMBIENT WAVE IMPULSE & VISUALIZER ENGINE ---
+    const ambientCanvas = document.getElementById('ambientCanvas');
+    const ambientCtx = ambientCanvas.getContext('2d');
+    const voiceCanvas = document.getElementById('voiceCanvas');
+    const voiceCtx = voiceCanvas.getContext('2d');
+
+    function resizeCanvases() {
+      ambientCanvas.width = window.innerWidth;
+      ambientCanvas.height = window.innerHeight;
+      voiceCanvas.width = voiceCanvas.offsetWidth;
+      voiceCanvas.height = voiceCanvas.offsetHeight;
+    }
+    window.addEventListener('resize', resizeCanvases);
+    resizeCanvases();
+
+    let impulses = [];
+
+    function triggerWaveImpulse(originX, originY, color = '#00f2fe') {
+      impulses.push({
+        x: originX || window.innerWidth / 2,
+        y: originY || window.innerHeight / 2,
+        radius: 10,
+        maxRadius: Math.max(window.innerWidth, window.innerHeight) * 0.8,
+        alpha: 0.7,
+        color: color
+      });
+    }
+
+    function renderAmbientLoop() {
+      ambientCtx.clearRect(0, 0, ambientCanvas.width, ambientCanvas.height);
+
+      // Render expanding wave impulses
+      impulses.forEach((imp, index) => {
+        imp.radius += 3.5;
+        imp.alpha *= 0.97;
+
+        ambientCtx.save();
+        ambientCtx.beginPath();
+        ambientCtx.arc(imp.x, imp.y, imp.radius, 0, Math.PI * 2);
+        ambientCtx.strokeStyle = imp.color;
+        ambientCtx.lineWidth = 2.5;
+        ambientCtx.globalAlpha = imp.alpha;
+        ambientCtx.stroke();
+        ambientCtx.restore();
+
+        if (imp.alpha < 0.02) {
+          impulses.splice(index, 1);
+        }
+      });
+
+      // Render voice visualizer sine waves
+      voiceCtx.clearRect(0, 0, voiceCanvas.width, voiceCanvas.height);
+      voiceCtx.lineWidth = 3;
+      voiceCtx.strokeStyle = getComputedStyle(document.body).getPropertyValue('--accent-cyan').trim();
+      voiceCtx.beginPath();
+
+      const time = Date.now() * 0.005;
+      const width = voiceCanvas.width;
+      const height = voiceCanvas.height;
+
+      for (let x = 0; x < width; x++) {
+        const y = height / 2 + Math.sin(x * 0.03 + time) * 15 * Math.sin(time * 0.5);
+        if (x === 0) voiceCtx.moveTo(x, y);
+        else voiceCtx.lineTo(x, y);
+      }
+      voiceCtx.stroke();
+
+      requestAnimationFrame(renderAmbientLoop);
+    }
+    renderAmbientLoop();
+
+    // --- 3. CALL & NOTIFICATION SIMULATION ---
+    function triggerCallSimulation() {
+      const overlay = document.getElementById('callOverlay');
+      overlay.classList.add('active');
+      triggerWaveImpulse(window.innerWidth / 2, 80, '#4cd964');
+      
+      if ("vibrate" in navigator) navigator.vibrate([200, 100, 200]);
+    }
+
+    function dismissCall() {
+      document.getElementById('callOverlay').classList.remove('active');
+    }
+
+    function answerCall() {
+      dismissCall();
+      alert("Call Answered! Active voice channel connected.");
+    }
+
+    function triggerNotification() {
+      const banner = document.getElementById('notifBanner');
+      banner.classList.add('active');
+      triggerWaveImpulse(window.innerWidth / 2, 80, '#ff416c');
+
+      setTimeout(() => {
+        banner.classList.remove('active');
+      }, 4000);
+    }
+
+    // --- 4. NIGHTSTAND DIMMER TOGGLE ---
+    function toggleNightMode() {
+      document.body.classList.toggle('night-mode');
+    }
+  </script>
+</body>
+</html>
